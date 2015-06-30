@@ -470,14 +470,14 @@ class PrayTimes():
 
 		deltaDays = self.jDate - self.julian(year, 1, 1)
 		fractionalYear = (year + deltaDays / (365 + calendar.isleap(year)) - 621.578082192) / 0.97022298
-		fractionalYear += math.floor(math.fabs(fractionalYear) / 3000) * 30 / 10631
+		fractionalYear += math.floor(math.fabs(fractionalYear) / 3000) * 30 / 10631.0
 		fractionalDay = fractionalYear - math.floor(fractionalYear)
 
 		hijraYear = fractionalYear - fractionalDay
 
-		if ((fractionalDay * 10631 / 30) - math.floor(fractionalDay * 10631 / 30) < 0.5):
-		    fractionalDay = math.floor(fractionalDay * 10631 / 30) + 1
-		else: fractionalDay = math.floor(fractionalDay * 10631 / 30) + 2
+		if ((fractionalDay * 10631 / 30.0) - math.floor(fractionalDay * 10631 / 30.0) < 0.5):
+		    fractionalDay = math.floor(fractionalDay * 10631 / 30.0) + 1
+		else: fractionalDay = math.floor(fractionalDay * 10631 / 30.0) + 2
 
 		gregorianYear = hijraYear * 0.970224044 + 621.574981435
 		gregorianFractionalDay = gregorianYear - math.floor(gregorianYear)
@@ -499,7 +499,7 @@ class PrayTimes():
 		if hijraMonth == 13:
 		    hijraMonth = 1
 		    hijraYear += 1
-		partDay = (hours + minutes / 60 + seconds / 3600) / 24
+		partDay = (hours + minutes / 60 + seconds / 3600) / 24.0
 		precise = self.pcision(self.jDate + partDay)
 		if hijraDay != precise:
 		    if (hijraDay == 1) and (precise > 28):
