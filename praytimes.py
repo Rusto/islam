@@ -2,7 +2,8 @@
 #!/usr/bin/env python
 # compatible with python 2.x and 3.x
 
-import math
+#import math
+import numpy
 import re
 import calendar
 import datetime
@@ -221,7 +222,7 @@ class PrayTimes():
 
 	# convert float time to the given format (see timeFormats)
 	def getFormattedTime(self, time, format, suffixes = None):
-		if math.isnan(time):
+		if numpy.isnan(time):
 			return self.invalidTime
 		if format == 'Float':
 			return time
@@ -229,9 +230,9 @@ class PrayTimes():
 			suffixes = self.timeSuffixes
 
 		time = self.fixhour(time + 0.5 / 60)  # add 0.5 minutes to round
-		hours = math.floor(time)
+		hours = numpy.floor(time)
 
-		minutes = math.floor((time - hours)* 60)
+		minutes = numpy.floor((time - hours)* 60)
 		suffix = suffixes[ 0 if hours < 12 else 1 ] if format == '12h' else ''
 		formattedTime = "%02d:%02d" % (hours, minutes) if format == "24h" else "%d:%02d" % ((hours + 11) % 12 + 1, minutes)
 		return formattedTime + suffix
@@ -294,9 +295,12 @@ class PrayTimes():
 		if month <= 2:
 			year -= 1
 			month += 12
-		A = math.floor(year / 100)
-		B = 2 - A + math.floor(A / 4)
-		return math.floor(365.25 * (year + 4716)) + math.floor(30.6001 * (month + 1)) + day + B - 1524.5
+#		A = numpy.floor(year / 100)
+		A = numpy.floor(year / 100)
+#		B = 2 - A + numpy.floor(A / 4)
+		B = 2 - A + numpy.floor(A / 4)
+#		return numpy.floor(365.25 * (year + 4716)) + numpy.floor(30.6001 * (month + 1)) + day + B - 1524.5
+		return numpy.floor(365.25 * (year + 4716)) + numpy.floor(30.6001 * (month + 1)) + day + B - 1524.5
 
 	#---------------------- Compute Prayer Times -----------------------
 
@@ -371,7 +375,7 @@ class PrayTimes():
 	# return sun angle for sunset/sunrise
 	def riseSetAngle(self, elevation = 0):
 		elevation = 0 if elevation == None else elevation
-		return 0.833 + 0.0347 * math.sqrt(elevation) # an approximation
+		return 0.833 + 0.0347 * numpy.sqrt(elevation) # an approximation
 
 	# apply offsets to the times
 	def tuneTimes(self, times):
@@ -399,7 +403,7 @@ class PrayTimes():
 	def adjustHLTime(self, time, base, angle, night, direction = None):
 		portion = self.nightPortion(angle, night)
 		diff = self.timeDiff(time, base) if direction == 'ccw' else self.timeDiff(base, time)
-		if math.isnan(time) or diff > portion:
+		if numpy.isnan(time) or diff > portion:
 			time = base + (-portion if direction == 'ccw' else portion)
 		return time
 
@@ -423,16 +427,16 @@ class PrayTimes():
 
 	def moonPhases(self, julianDay):
 		T = (julianDay - self.epoch) / 36525.0
-		mE = 297.8502042 + T * 445267.1115168 - math.pow(T, 2) * 0.0016300 + math.pow(T, 3) / 545868.0 - math.pow(T, 4) / 113065000
-		mA = 134.9634114 + T * 477198.8676313 + math.pow(T, 2) * 0.0089970 + math.pow(T, 3) / 69699.0 - math.pow(T, 4) / 863310000.0
-		SmA = 357.5291092 + T * 35999.0502909 - math.pow(T, 2) * 0.0001536 + math.pow(T, 3) / 24490000
+		mE = 297.8502042 + T * 445267.1115168 - numpy.power(T, 2) * 0.0016300 + numpy.power(T, 3) / 545868.0 - numpy.power(T, 4) / 113065000
+		mA = 134.9634114 + T * 477198.8676313 + numpy.power(T, 2) * 0.0089970 + numpy.power(T, 3) / 69699.0 - numpy.power(T, 4) / 863310000.0
+		SmA = 357.5291092 + T * 35999.0502909 - numpy.power(T, 2) * 0.0001536 + numpy.power(T, 3) / 24490000
 		D = self.fixangle(mE)
 		S = self.fixangle(SmA)
 		M = self.fixangle(mA)
 		phaseAngle = 180 - D - 6.289 * self.sin(M) + 2.1 * self.sin(S) - 1.274 * self.sin(self.fixangle(2 * D) - M) - 0.658 * self.sin(2 * D)
 		phaseAngle += -0.214 * self.sin(2 * M) 
 		phaseAngle += -0.110 * self.sin(D)
-		iF = (1 + self.cos(phaseAngle)) / 2 * (phaseAngle / math.fabs(phaseAngle))
+		iF = (1 + self.cos(phaseAngle)) / 2 * (phaseAngle / numpy.fabs(phaseAngle))
 		return iF
 
 	def pcision(self, F):
@@ -448,11 +452,11 @@ class PrayTimes():
 		while status:
 			Fn = self.moonPhases(jDn)
 			Fn2 = self.moonPhases(jDn - 1)
-			if ((Fn / math.fabs(Fn)) * (Fn2 / math.fabs(Fn2))) == 1:
+			if ((Fn / numpy.fabs(Fn)) * (Fn2 / numpy.fabs(Fn2))) == 1:
 				Dn += 1
 				jDn -= 1
 			else:
-				if math.fabs(Fn * Fn2) < 0.2: status = False
+				if numpy.fabs(Fn * Fn2) < 0.2: status = False
 				else:
 					Dn += 1
 					jDn -= 1
@@ -470,22 +474,22 @@ class PrayTimes():
 
 		deltaDays = self.jDate - self.julian(year, 1, 1)
 		fractionalYear = (year + deltaDays / (365 + calendar.isleap(year)) - 621.578082192) / 0.97022298
-		fractionalYear += math.floor(math.fabs(fractionalYear) / 3000) * 30 / 10631.0
-		fractionalDay = fractionalYear - math.floor(fractionalYear)
+		fractionalYear += numpy.floor(numpy.fabs(fractionalYear) / 3000) * 30 / 10631
+		fractionalDay = fractionalYear - numpy.floor(fractionalYear)
 
 		hijraYear = fractionalYear - fractionalDay
 
-		if ((fractionalDay * 10631 / 30.0) - math.floor(fractionalDay * 10631 / 30.0) < 0.5):
-		    fractionalDay = math.floor(fractionalDay * 10631 / 30.0) + 1
-		else: fractionalDay = math.floor(fractionalDay * 10631 / 30.0) + 2
+		if ((fractionalDay * 10631 / 30) - numpy.floor(fractionalDay * 10631 / 30) < 0.5):
+		    fractionalDay = numpy.floor(fractionalDay * 10631 / 30) + 1
+		else: fractionalDay = numpy.floor(fractionalDay * 10631 / 30) + 2
 
 		gregorianYear = hijraYear * 0.970224044 + 621.574981435
-		gregorianFractionalDay = gregorianYear - math.floor(gregorianYear)
+		gregorianFractionalDay = gregorianYear - numpy.floor(gregorianYear)
 		gregorianYear -= gregorianFractionalDay
-		gregorianDay = math.floor((365 + calendar.isleap(gregorianYear)) * gregorianFractionalDay) + 1
+		gregorianDay = numpy.floor((365 + calendar.isleap(gregorianYear)) * gregorianFractionalDay) + 1
 		gregorianYear += gregorianDay / (365 + calendar.isleap(gregorianYear))
 		hijraFractionalYear = (gregorianYear - 621.574981435) / 0.970224044
-		hijraFractionalDay = hijraFractionalYear - math.floor(hijraFractionalYear)
+		hijraFractionalDay = hijraFractionalYear - numpy.floor(hijraFractionalYear)
 		hijraDay = hijraFractionalDay * 10631 / 30 + 1;
 		hijraMonth = 1
 		hijraFractionalDay = 1
@@ -495,11 +499,11 @@ class PrayTimes():
 		    if hijraDay >= self.fractionalMonth:
 		        hijraDay = hijraDay - self.fractionalMonth
 		        hijraMonth += 1
-		hijraDay = math.floor(hijraDay) + 1
+		hijraDay = numpy.floor(hijraDay) + 1
 		if hijraMonth == 13:
 		    hijraMonth = 1
 		    hijraYear += 1
-		partDay = (hours + minutes / 60 + seconds / 3600) / 24.0
+		partDay = (hours + minutes / 60 + seconds / 3600) / 24
 		precise = self.pcision(self.jDate + partDay)
 		if hijraDay != precise:
 		    if (hijraDay == 1) and (precise > 28):
@@ -534,24 +538,27 @@ class PrayTimes():
 
 	#----------------- Degree-Based Math Functions -------------------
 
-	def sin(self, d): return math.sin(math.radians(d))
-	def cos(self, d): return math.cos(math.radians(d))
-	def tan(self, d): return math.tan(math.radians(d))
+#	def sin(self, d): return numpy.sin(numpy.radians(d))
+	def sin(self, d): return numpy.sin(numpy.radians(d))
+	def cos(self, d): return numpy.cos(numpy.radians(d))
+	def tan(self, d): return numpy.tan(numpy.radians(d))
 
-	def arcsin(self, x): return math.degrees(math.asin(x))
-	def arccos(self, x): return math.degrees(math.acos(x))
-	def arctan(self, x): return math.degrees(math.atan(x))
+	def arcsin(self, x): return numpy.degrees(numpy.arcsin(x))
+	def arccos(self, x): return numpy.degrees(numpy.arccos(x))
+	def arctan(self, x): return numpy.degrees(numpy.arctan(x))
 
-	def arccot(self, x): return math.degrees(math.atan(1.0/x))
-	def arctan2(self, y, x): return math.degrees(math.atan2(y, x))
+	def arccot(self, x): return numpy.degrees(numpy.arctan(1.0/x))
+	def arctan2(self, y, x): return numpy.degrees(numpy.arctan2(y, x))
 
 	def fixangle(self, angle): return self.fix(angle, 360.0)
 	def fixhour(self, hour): return self.fix(hour, 24.0)
 
 	def fix(self, a, mode):
-		if math.isnan(a):
+#		if numpy.isnan(a):
+		if numpy.isnan(a):
 			return a
-		a = a - mode * (math.floor(a / mode))
+#		a = a - mode * (numpy.floor(a / mode))
+		a = a - mode * (numpy.floor(a / mode))
 		return a + mode if a < 0 else a
 
 #---------------------- prayTimes Object -----------------------
