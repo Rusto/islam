@@ -1,8 +1,11 @@
+# -*- coding: utf-8 -*-
 #!/usr/bin/env python
 # compatible with python 2.x and 3.x
 
 import math
 import re
+import calendar
+import datetime
 
 '''
 --------------------- Copyright Block ----------------------
@@ -46,6 +49,19 @@ http://praytimes.org/calculation
 	getSetting ()            // get current calculation parameters
 	getOffsets ()            // get current time offsets
 
+	#
+	##
+	### calculation of Hijra date
+
+	getHijra (date)
+
+	setBoundary (hijraTimeName) // set time when switch date 
+
+	getBoundary ()            // get time when switch date
+
+	###
+	##
+	#
 
 ------------------------- Sample Usage --------------------------
 
@@ -54,6 +70,7 @@ http://praytimes.org/calculation
 	>>> times['sunrise']
 	07:26
 
+-----------------------------------------------------------------
 '''
 
 #----------------------- PrayTimes Class ------------------------
@@ -109,6 +126,16 @@ class PrayTimes():
 		'maghrib': '0 min', 'midnight': 'Standard'
 	}
 
+	# 1 january 2000 12:00
+	epoch = 2451545.0
+	# 17 november 1858 00:00
+	#epoch = 2400000.5
+	fractionalMonth = 29.53058796
+
+	weekDays = ["al-Ithnayn", "ath-Thulāthāʼ", "al-Arbi‘ā’", "al-Khamīs", "al-Jumu‘ah", "as-Sabt", "al-Aḥad"]
+	months = ["Muḥarram", "Ṣafar", "Rabī‘ al-Awwal", "Rabī‘ ath-Thānī", "Jumādá al-Ūlá", "Jumādá ath-Thāniyah", "Rajab", "Sha‘bān", "Ramaḍān", "Shawwāl", "Dhū al-Qa‘dah", "Dhū al-Ḥijjah"]
+
+
 	#---------------------- Default Settings --------------------
 
 	calcMethod = 'MWL'
@@ -128,12 +155,15 @@ class PrayTimes():
 	numIterations = 1
 	offset = {}
 
+	# Hijra date change in Magrib
+	hijraTimeName = 'Maghrib'
+
 	#---------------------- Initialization -----------------------
 
-	# !!! fixed trouble - added i_method variable
+	# !!! fixed trouble - added initMethod variable
 	# he had always switched on last method in self.methods ['MWL' ]
 
-	def __init__(self, i_method = "MWL") :
+	def __init__(self, initMethod = "MWL") :
 
 		# set methods defaults
 		for method, config in self.methods.items():
@@ -142,7 +172,7 @@ class PrayTimes():
 					config['params'][name] = value
 
 		# initialize settings
-		self.calcMethod = i_method if i_method in self.methods else "MWL"
+		self.calcMethod = initMethod if initMethod in self.methods else "MWL"
 		params = self.methods[self.calcMethod]['params']
 		for name, value in params.items():
 			self.settings[name] = value
@@ -206,6 +236,18 @@ class PrayTimes():
 		formattedTime = "%02d:%02d" % (hours, minutes) if format == "24h" else "%d:%02d" % ((hours + 11) % 12 + 1, minutes)
 		return formattedTime + suffix
 
+	# return Hijra date for a given date
+	def getHijra(self, date):
+		return self.computeHijraDate(date)
+
+	# set time when switch date 
+	def setBoundary(self, hijraTimeName):
+		self.hijraTimeName = hijraTimeName
+
+	# get time when switch date
+	def getBoundary(self):
+		return self.hijraTimeName
+
 	#---------------------- Calculation Functions -----------------------
 
 	# compute mid-day time
@@ -215,7 +257,6 @@ class PrayTimes():
 
 	# compute the time at which sun reaches a specific angle below horizon
 	def sunAngleTime(self, angle, time, direction = None):
-
 		try:
 			decl = self.sunPosition(self.jDate + time)[0]
 			noon = self.midDay(time)
@@ -246,7 +287,7 @@ class PrayTimes():
 		decl = self.arcsin(self.sin(e) * self.sin(L))
 
 		return (decl, eqt)
-		
+
 	# convert Gregorian date to Julian day
 	# Ref: Astronomical Algorithms by Jean Meeus
 	def julian(self, year, month, day):
@@ -378,6 +419,104 @@ class PrayTimes():
 			times[i] /= 24.0
 		return times
 
+	#---------------------- Compute Hijra Date -----------------------
+
+	def moonPhases(self, julianDay):
+		T = (julianDay - self.epoch) / 36525.0
+		mE = 297.8502042 + T * 445267.1115168 - math.pow(T, 2) * 0.0016300 + math.pow(T, 3) / 545868.0 - math.pow(T, 4) / 113065000
+		mA = 134.9634114 + T * 477198.8676313 + math.pow(T, 2) * 0.0089970 + math.pow(T, 3) / 69699.0 - math.pow(T, 4) / 863310000.0
+		SmA = 357.5291092 + T * 35999.0502909 - math.pow(T, 2) * 0.0001536 + math.pow(T, 3) / 24490000
+		D = self.fixangle(mE)
+		S = self.fixangle(SmA)
+		M = self.fixangle(mA)
+		phaseAngle = 180 - D - 6.289 * self.sin(M) + 2.1 * self.sin(S) - 1.274 * self.sin(self.fixangle(2 * D) - M) - 0.658 * self.sin(2 * D)
+		phaseAngle += -0.214 * self.sin(2 * M) 
+		phaseAngle += -0.110 * self.sin(D)
+		iF = (1 + self.cos(phaseAngle)) / 2 * (phaseAngle / math.fabs(phaseAngle))
+		return iF
+
+	def pcision(self, F):
+		# calculate moon day
+		### add sunset - sunrise
+		### if now > sunset: day += 1
+		status = True
+		Dn = 0
+		jDn = F
+		if self.moonPhases(jDn - 1) <= 0: 
+			jDn -= 1
+			Dn += 1
+		while status:
+			Fn = self.moonPhases(jDn)
+			Fn2 = self.moonPhases(jDn - 1)
+			if ((Fn / math.fabs(Fn)) * (Fn2 / math.fabs(Fn2))) == 1:
+				Dn += 1
+				jDn -= 1
+			else:
+				if math.fabs(Fn * Fn2) < 0.2: status = False
+				else:
+					Dn += 1
+					jDn -= 1
+		return Dn
+
+	# compute of Hijri date based on a known Gregorian date
+	def computeHijraDate(self, date):
+		timeTuple = date.timetuple()
+		year    = date.year
+		#month   = date.month
+		#day     = date.day
+		hours   = timeTuple[3]
+		minutes = timeTuple[4]
+		seconds = timeTuple[5]
+
+		deltaDays = self.jDate - self.julian(year, 1, 1)
+		fractionalYear = (year + deltaDays / (365 + calendar.isleap(year)) - 621.578082192) / 0.97022298
+		fractionalYear += math.floor(math.fabs(fractionalYear) / 3000) * 30 / 10631.0
+		fractionalDay = fractionalYear - math.floor(fractionalYear)
+
+		hijraYear = fractionalYear - fractionalDay
+
+		if ((fractionalDay * 10631 / 30.0) - math.floor(fractionalDay * 10631 / 30.0) < 0.5):
+		    fractionalDay = math.floor(fractionalDay * 10631 / 30.0) + 1
+		else: fractionalDay = math.floor(fractionalDay * 10631 / 30.0) + 2
+
+		gregorianYear = hijraYear * 0.970224044 + 621.574981435
+		gregorianFractionalDay = gregorianYear - math.floor(gregorianYear)
+		gregorianYear -= gregorianFractionalDay
+		gregorianDay = math.floor((365 + calendar.isleap(gregorianYear)) * gregorianFractionalDay) + 1
+		gregorianYear += gregorianDay / (365 + calendar.isleap(gregorianYear))
+		hijraFractionalYear = (gregorianYear - 621.574981435) / 0.970224044
+		hijraFractionalDay = hijraFractionalYear - math.floor(hijraFractionalYear)
+		hijraDay = hijraFractionalDay * 10631 / 30 + 1;
+		hijraMonth = 1
+		hijraFractionalDay = 1
+		while hijraFractionalDay < fractionalDay:
+		    hijraDay += 1
+		    hijraFractionalDay += 1
+		    if hijraDay >= self.fractionalMonth:
+		        hijraDay = hijraDay - self.fractionalMonth
+		        hijraMonth += 1
+		hijraDay = math.floor(hijraDay) + 1
+		if hijraMonth == 13:
+		    hijraMonth = 1
+		    hijraYear += 1
+		partDay = (hours + minutes / 60 + seconds / 3600) / 24.0
+		precise = self.pcision(self.jDate + partDay)
+		if hijraDay != precise:
+		    if (hijraDay == 1) and (precise > 28):
+		        hijraMonth -= 1
+		        if hijraMonth == 0: 
+		            hijraMonth = 12
+		            hijraYear -= 1
+		    elif (hijraDay > 28) and (precise < 3):
+		        hijraMonth += 1
+		        if hijraMonth == 13:
+		            hijraMonth = 1
+		            hijraYear += 1
+		hijraDay = precise
+		if hijraYear < 1: hijraYear -= 1
+
+		return str(hijraDay) + " " + self.months[hijraMonth - 1] + " " + str(int(hijraYear)) + ", " + self.weekDays[timeTuple[6]]
+
 	#---------------------- Misc Functions -----------------------
 
 	# compute the difference between two times
@@ -425,21 +564,29 @@ prayTimes.adjust({"asr": 'Hanafi'})
 
 # sample code to run in standalone mode only
 if __name__ == "__main__":
-	from datetime import date
-	date = date.today()
-	print('Prayer Times for' + date.strftime("%e %b %Y, %A") + ' in Karaganda/Kazakhstan\n'+ ('='* 60))
+	date = datetime.date.today()
+	#print('Prayer Times for ' + date.strftime("%e %b %Y, %A") + ' in Karaganda/Kazakhstan')
 	if ((date.month == 3) and (date.day >= 20)) or ((date.month > 3) and (date.month < 9)) or ((date.month == 9) and (date.day <= 21)): prayTimes.adjust({"isha": '-95 min'})
 	else: prayTimes.adjust({"isha": '-90 min'})
 	times = prayTimes.getTimes(date.today(), (49.89362, 73.18815), 6);
+	print prayTimes.getHijra(date)
+	print '=' * 20
+
+	#
+	##
+	### added to determine the time of Fajr on fazilet
+	prayTimesMWL = PrayTimes('MWL')
+	prayTimesMWL.adjust({"imsak": '10 min'})
+	prayTimesMWL.adjust({"asr": 'Hanafi'})
+	if ((date.month == 3) and (date.day >= 20)) or ((date.month > 3) and (date.month < 9)) or ((date.month == 9) and (date.day <= 21)): prayTimesMWL.adjust({"isha": '-95 min'})
+	else: prayTimesMWL.adjust({"isha": '-90 min'})
+	timesMWL = prayTimesMWL.getTimes(date.today(), (49.89362, 73.18815), 6);
+	for i in ['Imsak', 'Fajr', 'Sunrise', 'Dhuhr', 'Asr', 'Sunset', 'Maghrib', 'Isha', 'Midnight']:
+		if timesMWL[i.lower()] <> times[i.lower()]: times[i.lower()] = timesMWL[i.lower()] + "/" + times[i.lower()]
+		if i == prayTimes.hijraTimeName: times[i.lower()] = times[i.lower()] + " *"
+	###
+	##
+	#
+
 	for i in ['Imsak', 'Fajr', 'Sunrise', 'Dhuhr', 'Asr', 'Sunset', 'Maghrib', 'Isha', 'Midnight']:
 		print(i+ ': '+ times[i.lower()])
-
-#	month = 1
-#	days = [31, 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31]
-#	for i in days:
-#		for j in range(i):
-#			if ((month == 3) and (j + 1 >= 20)) or ((month > 3) and (month < 9)) or ((month == 9) and (j + 1 <= 21)): prayTimes.adjust({"isha": '-95 min'})
-#			else: prayTimes.adjust({"isha": '-90 min'})
-#			times = prayTimes.getTimes(date(2015, month, j + 1), (49.776275, 73.126314), 6);
-#			print times['imsak'], times['fajr'], times['sunrise'], times['dhuhr'], times['asr'], times['maghrib'], times['isha']
-#		month += 1
